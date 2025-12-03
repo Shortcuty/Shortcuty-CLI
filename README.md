@@ -35,12 +35,6 @@ pip install -e .
 pip install git+https://github.com/Shortcuty/Shortcuty-CLI.git
 ```
 
-### Option 3: Install from PyPI (if published)
-
-```bash
-pip install shortcuty-cli
-```
-
 ### Verify Installation
 
 After installation, verify the CLI is working:

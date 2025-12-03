@@ -11,6 +11,7 @@ from shortcuty_cli.formatters import (
     format_history,
     format_message,
     format_screenshot,
+    format_delete_screenshot,
 )
 
 
@@ -170,7 +171,6 @@ def submit(ctx, uuid):
     help="Updater type",
 )
 @click.option("--new-version", help="New version string (e.g., '2.0')")
-@click.option("--new-sharing-url", help="Sharing URL for new version")
 @click.option("--changelog", help="Changelog text")
 @click.pass_context
 def update(
@@ -183,7 +183,6 @@ def update(
     requires_ios26_ai,
     updater_type,
     new_version,
-    new_sharing_url,
     changelog,
 ):
     """Update an existing shortcut."""
@@ -191,7 +190,7 @@ def update(
         click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
         ctx.exit(1)
     
-    if not any([name, description, sharing_url, category, requires_ios26_ai, updater_type, new_version, new_sharing_url, changelog]):
+    if not any([name, description, sharing_url, category, requires_ios26_ai, updater_type, new_version, changelog]):
         click.echo("Error: At least one update field must be provided.", err=True)
         ctx.exit(1)
     
@@ -206,7 +205,6 @@ def update(
             requires_ios26_ai=requires_ios26_ai if requires_ios26_ai else None,
             updater_type=updater_type,
             new_version=new_version,
-            new_sharing_url=new_sharing_url,
             changelog=changelog,
         )
         click.echo(format_message(response, ctx.obj["json_output"]))
@@ -229,6 +227,25 @@ def upload_screenshot(ctx, uuid, file):
         client = ctx.obj["client"]
         response = client.upload_screenshot(uuid, file)
         click.echo(format_screenshot(response, ctx.obj["json_output"]))
+    except ShortcutyAPIError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.argument("uuid")
+@click.argument("screenshot_id", type=int)
+@click.pass_context
+def delete_screenshot(ctx, uuid, screenshot_id):
+    """Delete a screenshot for a shortcut."""
+    if not ctx.obj["api_key"]:
+        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
+        ctx.exit(1)
+    
+    try:
+        client = ctx.obj["client"]
+        response = client.delete_screenshot(uuid, screenshot_id)
+        click.echo(format_delete_screenshot(response, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
         click.echo(f"Error: {e}", err=True)
         ctx.exit(1)

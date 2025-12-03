@@ -1,12 +1,55 @@
 # Shortcuty Creator API CLI
 
-A command-line interface for managing shortcuts via the Shortcuty Creator API.
+A command-line interface for managing shortcuts via the Shortcuty Creator API v1.
+
+📚 **API Documentation:** [Shortcuty API Docs](https://github.com/Shortcuty/ShortcutyDocs)
+
+## Features
+
+- Create, update, and manage shortcuts
+- Upload and delete screenshots
+- View shortcut history and changelogs
+- List and filter your shortcuts
+- JSON output support for scripting
+- Multiple authentication methods
+
+## Prerequisites
+
+- Python 3.8 or higher
+- pip (Python package manager)
 
 ## Installation
 
+### Option 1: Install from Local Source (Development)
+
+Clone or download this repository, then install:
+
 ```bash
+cd /path/to/shortcuty-cli
 pip install -e .
 ```
+
+### Option 2: Install from Git Repository
+
+```bash
+pip install git+https://github.com/Shortcuty/Shortcuty-CLI.git
+```
+
+### Option 3: Install from PyPI (if published)
+
+```bash
+pip install shortcuty-cli
+```
+
+### Verify Installation
+
+After installation, verify the CLI is working:
+
+```bash
+shortcuty --help
+```
+
+You should see the CLI help menu. If you get a "command not found" error, make sure the Python scripts directory is in your PATH.
 
 ## Configuration
 
@@ -35,10 +78,32 @@ shortcuty categories
 
 ### Create a Shortcut
 
+Create a draft shortcut:
+
 ```bash
 shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
   --description "My awesome shortcut" \
   --category "Productivity"
+```
+
+Create and immediately submit for review:
+
+```bash
+shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
+  --description "My awesome shortcut" \
+  --category "Productivity" \
+  --submit
+```
+
+Additional options:
+
+```bash
+shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
+  --description "My awesome shortcut" \
+  --category "Productivity" \
+  --requires-ios26-ai \
+  --updater-type shortcuty \
+  --submit
 ```
 
 ### List Your Shortcuts
@@ -71,10 +136,28 @@ shortcuty submit <uuid>
 shortcuty update <uuid> --name "New Name" --description "New description"
 ```
 
+You can update multiple fields at once:
+
+```bash
+shortcuty update <uuid> \
+  --name "Updated Name" \
+  --description "Updated description" \
+  --sharing-url "https://www.icloud.com/shortcuts/new-url" \
+  --category "Productivity" \
+  --new-version "2.0" \
+  --changelog "What's new in this version"
+```
+
 ### Upload Screenshot
 
 ```bash
 shortcuty upload-screenshot <uuid> /path/to/screenshot.png
+```
+
+### Delete Screenshot
+
+```bash
+shortcuty delete-screenshot <uuid> <screenshot_id>
 ```
 
 ## JSON Output
@@ -82,10 +165,18 @@ shortcuty upload-screenshot <uuid> /path/to/screenshot.png
 Add `--json` flag to any command for JSON output (useful for scripting):
 
 ```bash
-shortcuty list --json
+shortcuty --json list
+shortcuty --json get <uuid>
+shortcuty --json categories
 ```
+
+**Note:** The `--json` flag must be placed before the command name.
 
 ## Getting Your API Key
 
 Visit your Account Settings on [shortcuty.app](https://shortcuty.app) and create an API key in the API Key Management section.
+
+## Documentation
+
+For detailed API documentation, see the [Shortcuty API Documentation](https://github.com/Shortcuty/ShortcutyDocs).
 

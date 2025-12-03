@@ -121,7 +121,6 @@ class ShortcutyAPIClient:
         requires_ios26_ai: Optional[bool] = None,
         updater_type: Optional[str] = None,
         new_version: Optional[str] = None,
-        new_sharing_url: Optional[str] = None,
         changelog: Optional[str] = None
     ) -> Dict[str, Any]:
         """Update an existing shortcut."""
@@ -140,8 +139,6 @@ class ShortcutyAPIClient:
             data["updater_type"] = updater_type
         if new_version is not None:
             data["new_version"] = new_version
-        if new_sharing_url is not None:
-            data["new_sharing_url"] = new_sharing_url
         if changelog is not None:
             data["changelog"] = changelog
         
@@ -158,4 +155,8 @@ class ShortcutyAPIClient:
             raise ShortcutyAPIError(f"File not found: {file_path}")
         except IOError as e:
             raise ShortcutyAPIError(f"Error reading file: {str(e)}")
+    
+    def delete_screenshot(self, shortcut_uuid: str, screenshot_id: int) -> Dict[str, Any]:
+        """Delete a screenshot for a shortcut."""
+        return self._request("DELETE", f"/shortcuts/{shortcut_uuid}/screenshots/{screenshot_id}")
 

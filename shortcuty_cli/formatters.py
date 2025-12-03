@@ -77,31 +77,41 @@ def format_shortcut_details(response: Dict[str, Any], json_output: bool = False)
         return format_json(response)
     
     shortcut = response.get("shortcut", {})
-    comments = response.get("comments", [])
     screenshots = response.get("screenshots", [])
     latest_update = response.get("latest_update")
     
     lines = [format_shortcut(shortcut, json_output=False)]
     
-    if comments:
-        lines.append(f"\nComments ({len(comments)}):")
-        for comment in comments[:5]:  # Show first 5
-            lines.append(f"  • {comment}")
-        if len(comments) > 5:
-            lines.append(f"  ... and {len(comments) - 5} more")
-    
     if screenshots:
         lines.append(f"\nScreenshots ({len(screenshots)}):")
         for screenshot in screenshots:
             if isinstance(screenshot, dict):
-                lines.append(f"  • {screenshot.get('url', screenshot.get('filename', 'N/A'))}")
+                url = screenshot.get('url', screenshot.get('filename', 'N/A'))
+                order = screenshot.get('order', '')
+                screenshot_id = screenshot.get('id', '')
+                if order:
+                    lines.append(f"  [{order}] {url} (ID: {screenshot_id})")
+                else:
+                    lines.append(f"  • {url} (ID: {screenshot_id})")
             else:
                 lines.append(f"  • {screenshot}")
     
     if latest_update:
         lines.append(f"\nLatest Update:")
         if isinstance(latest_update, dict):
-            lines.append(f"  {json.dumps(latest_update, indent=4)}")
+            update_lines = []
+            if latest_update.get('new_version'):
+                update_lines.append(f"  Version: {latest_update['new_version']}")
+            if latest_update.get('changelog'):
+                update_lines.append(f"  Changelog: {latest_update['changelog']}")
+            if latest_update.get('status'):
+                update_lines.append(f"  Status: {latest_update['status']}")
+            if latest_update.get('approved_at'):
+                update_lines.append(f"  Approved: {latest_update['approved_at']}")
+            if update_lines:
+                lines.extend(update_lines)
+            else:
+                lines.append(f"  {json.dumps(latest_update, indent=4)}")
         else:
             lines.append(f"  {latest_update}")
     
@@ -126,18 +136,41 @@ def format_history(response: Dict[str, Any], json_output: bool = False) -> str:
         return "\n".join(lines) + "No history found."
     
     for entry in changelog:
-        lines.append(f"Version {entry.get('version', 'N/A')} - {entry.get('date', 'N/A')}")
-        lines.append(f"  Status: {entry.get('status', 'N/A')}")
+        version = entry.get('version', 'N/A')
+        date = entry.get('date', 'N/A')
+        status = entry.get('status', 'N/A')
+        
+        lines.append(f"Version {version} - {date}")
+        lines.append(f"  Status: {status}")
+        
         if entry.get('changelog'):
             lines.append(f"  Changelog: {entry['changelog']}")
+        
+        if entry.get('sharing_url'):
+            lines.append(f"  Sharing URL: {entry['sharing_url']}")
+        
         if entry.get('changes'):
             changes = entry['changes']
+            change_items = []
             if changes.get('name'):
-                lines.append(f"  Name changed: {changes['name']}")
+                change_items.append(f"Name: {changes['name']}")
+            if changes.get('description'):
+                change_items.append(f"Description: {changes['description'][:50]}...")
+            if changes.get('category'):
+                change_items.append(f"Category: {changes['category']}")
+            if changes.get('requires_ios26_ai') is not None:
+                change_items.append(f"Requires iOS 26 AI: {changes['requires_ios26_ai']}")
+            if changes.get('updater_type'):
+                change_items.append(f"Updater Type: {changes['updater_type']}")
             if changes.get('new_version'):
-                lines.append(f"  Version changed: {changes['new_version']}")
-            if changes.get('old_sharing_url'):
-                lines.append(f"  Previous URL: {changes['old_sharing_url']}")
+                change_items.append(f"Version: {changes['new_version']}")
+            
+            if change_items:
+                lines.append(f"  Changes: {', '.join(change_items)}")
+        
+        if entry.get('rejection_reason'):
+            lines.append(f"  Rejection Reason: {entry['rejection_reason']}")
+        
         lines.append("")
     
     return "\n".join(lines)
@@ -168,4 +201,13 @@ def format_screenshot(response: Dict[str, Any], json_output: bool = False) -> st
         f"  Uploaded: {screenshot.get('uploaded_at', 'N/A')}",
     ]
     return "\n".join(lines)
+
+
+def format_delete_screenshot(response: Dict[str, Any], json_output: bool = False) -> str:
+    """Format screenshot deletion response."""
+    if json_output:
+        return format_json(response)
+    
+    message = response.get("message", "Screenshot deleted successfully")
+    return message
 

@@ -1,8 +1,16 @@
 """Command-line interface for Shortcuty Creator API."""
 
+import functools
 import click
-from shortcuty_cli.api_client import ShortcutyAPIClient, ShortcutyAPIError
+from shortcuty_cli.api_client import ShortcutyAPIClient, ShortcutyAPIError, validate_image_file
 from shortcuty_cli.config import get_api_key
+from shortcuty_cli.updater import (
+    check_for_updates,
+    should_check_updates,
+    update_cache_timestamp,
+    prompt_for_update,
+    get_current_version,
+)
 from shortcuty_cli.formatters import (
     format_categories,
     format_shortcut,
@@ -13,6 +21,17 @@ from shortcuty_cli.formatters import (
     format_screenshot,
     format_delete_screenshot,
 )
+
+
+def require_api_key(f):
+    """Decorator to require API key for a command."""
+    @functools.wraps(f)
+    def wrapper(ctx, *args, **kwargs):
+        if not ctx.obj["api_key"]:
+            click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
+            ctx.exit(1)
+        return f(ctx, *args, **kwargs)
+    return wrapper
 
 
 @click.group()
@@ -27,14 +46,31 @@ from shortcuty_cli.formatters import (
     is_flag=True,
     help="Output results as JSON",
 )
+@click.option(
+    "--no-check-updates",
+    "no_check_updates",
+    is_flag=True,
+    help="Skip automatic update check",
+)
 @click.pass_context
-def cli(ctx, api_key, json_output):
+def cli(ctx, api_key, json_output, no_check_updates):
     """Shortcuty Creator API CLI - Manage shortcuts programmatically."""
     ctx.ensure_object(dict)
     api_key = get_api_key(api_key)
     ctx.obj["api_key"] = api_key
     ctx.obj["json_output"] = json_output
     ctx.obj["client"] = ShortcutyAPIClient(api_key=api_key)
+    
+    # Check for updates (non-blocking, with error handling)
+    if not no_check_updates and should_check_updates():
+        try:
+            update_info = check_for_updates()
+            if update_info:
+                prompt_for_update(update_info)
+            update_cache_timestamp()
+        except Exception:
+            # Silently fail - don't interrupt CLI usage if update check fails
+            pass
 
 
 @cli.command()
@@ -62,12 +98,9 @@ def categories(ctx):
 )
 @click.option("--submit", is_flag=True, help="Submit for review immediately")
 @click.pass_context
+@require_api_key
 def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_type, submit):
     """Create a new shortcut."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.create_shortcut(
@@ -89,12 +122,9 @@ def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_t
 @click.option("--page", type=int, default=1, help="Page number")
 @click.option("--per-page", type=int, default=20, help="Items per page")
 @click.pass_context
+@require_api_key
 def list(ctx, page, per_page):
     """List your shortcuts."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.list_shortcuts(page=page, per_page=per_page)
@@ -107,12 +137,9 @@ def list(ctx, page, per_page):
 @cli.command()
 @click.argument("uuid")
 @click.pass_context
+@require_api_key
 def get(ctx, uuid):
     """Get shortcut details by UUID."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.get_shortcut(uuid)
@@ -125,12 +152,9 @@ def get(ctx, uuid):
 @cli.command()
 @click.argument("identifier")
 @click.pass_context
+@require_api_key
 def history(ctx, identifier):
     """Get version history for a shortcut."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.get_shortcut_history(identifier)
@@ -143,12 +167,9 @@ def history(ctx, identifier):
 @cli.command()
 @click.argument("uuid")
 @click.pass_context
+@require_api_key
 def submit(ctx, uuid):
     """Submit shortcut for review."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.submit_shortcut(uuid)
@@ -173,6 +194,7 @@ def submit(ctx, uuid):
 @click.option("--new-version", help="New version string (e.g., '2.0')")
 @click.option("--changelog", help="Changelog text")
 @click.pass_context
+@require_api_key
 def update(
     ctx,
     uuid,
@@ -186,10 +208,6 @@ def update(
     changelog,
 ):
     """Update an existing shortcut."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     if not any([name, description, sharing_url, category, requires_ios26_ai, updater_type, new_version, changelog]):
         click.echo("Error: At least one update field must be provided.", err=True)
         ctx.exit(1)
@@ -217,13 +235,12 @@ def update(
 @click.argument("uuid")
 @click.argument("file", type=click.Path(exists=True, readable=True))
 @click.pass_context
+@require_api_key
 def upload_screenshot(ctx, uuid, file):
     """Upload a screenshot for a shortcut."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
+        # Validate file type before uploading
+        validate_image_file(file)
         client = ctx.obj["client"]
         response = client.upload_screenshot(uuid, file)
         click.echo(format_screenshot(response, ctx.obj["json_output"]))
@@ -236,18 +253,36 @@ def upload_screenshot(ctx, uuid, file):
 @click.argument("uuid")
 @click.argument("screenshot_id", type=int)
 @click.pass_context
+@require_api_key
 def delete_screenshot(ctx, uuid, screenshot_id):
     """Delete a screenshot for a shortcut."""
-    if not ctx.obj["api_key"]:
-        click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
-        ctx.exit(1)
-    
     try:
         client = ctx.obj["client"]
         response = client.delete_screenshot(uuid, screenshot_id)
         click.echo(format_delete_screenshot(response, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
         click.echo(f"Error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def check_updates(ctx):
+    """Check for available updates and optionally install them."""
+    current_version = get_current_version()
+    click.echo(f"Current version: {current_version}")
+    click.echo("Checking for updates...")
+    
+    try:
+        update_info = check_for_updates()
+        if update_info:
+            update_cache_timestamp()
+            prompt_for_update(update_info)
+        else:
+            click.echo("You are already running the latest version!")
+            update_cache_timestamp()
+    except Exception as e:
+        click.echo(f"Error checking for updates: {e}", err=True)
         ctx.exit(1)
 
 

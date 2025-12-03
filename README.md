@@ -20,16 +20,7 @@ A command-line interface for managing shortcuts via the Shortcuty Creator API v1
 
 ## Installation
 
-### Option 1: Install from Local Source (Development)
-
-Clone or download this repository, then install:
-
-```bash
-cd /path/to/shortcuty-cli
-pip install -e .
-```
-
-### Option 2: Install from Git Repository
+### Install from Git Repository
 
 ```bash
 pip install git+https://github.com/Shortcuty/Shortcuty-CLI.git

@@ -115,6 +115,20 @@ def install_update() -> bool:
         return False
 
 
+def show_update_notification(update_info: Dict[str, Any]) -> None:
+    """
+    Show a non-blocking notification about available update.
+    
+    Args:
+        update_info: Dictionary with update information
+    """
+    current = update_info.get("current_version", "unknown")
+    latest = update_info.get("version", "unknown")
+    
+    print(f"\n⚠️  Update available: {current} -> {latest}")
+    print(f"   Run 'shortcuty check-updates' to update\n")
+
+
 def prompt_for_update(update_info: Dict[str, Any]) -> bool:
     """
     Prompt user to confirm and install update.

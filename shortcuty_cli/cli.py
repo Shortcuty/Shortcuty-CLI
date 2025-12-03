@@ -8,8 +8,9 @@ from shortcuty_cli.updater import (
     check_for_updates,
     should_check_updates,
     update_cache_timestamp,
-    prompt_for_update,
+    show_update_notification,
     get_current_version,
+    install_update,
 )
 from shortcuty_cli.formatters import (
     format_categories,
@@ -66,7 +67,7 @@ def cli(ctx, api_key, json_output, no_check_updates):
         try:
             update_info = check_for_updates()
             if update_info:
-                prompt_for_update(update_info)
+                show_update_notification(update_info)
             update_cache_timestamp()
         except Exception:
             # Silently fail - don't interrupt CLI usage if update check fails
@@ -268,7 +269,7 @@ def delete_screenshot(ctx, uuid, screenshot_id):
 @cli.command()
 @click.pass_context
 def check_updates(ctx):
-    """Check for available updates and optionally install them."""
+    """Check for available updates."""
     current_version = get_current_version()
     click.echo(f"Current version: {current_version}")
     click.echo("Checking for updates...")
@@ -276,13 +277,45 @@ def check_updates(ctx):
     try:
         update_info = check_for_updates()
         if update_info:
+            latest_version = update_info.get("version", "unknown")
+            click.echo(f"\nUpdate available: {current_version} -> {latest_version}")
+            click.echo(f"Run 'shortcuty update' to install the update.")
             update_cache_timestamp()
-            prompt_for_update(update_info)
         else:
             click.echo("You are already running the latest version!")
             update_cache_timestamp()
     except Exception as e:
         click.echo(f"Error checking for updates: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def update(ctx):
+    """Update to the latest version."""
+    current_version = get_current_version()
+    click.echo(f"Current version: {current_version}")
+    click.echo("Checking for updates...")
+    
+    try:
+        update_info = check_for_updates()
+        if update_info:
+            latest_version = update_info.get("version", "unknown")
+            click.echo(f"\nUpdating from {current_version} to {latest_version}...")
+            
+            if install_update():
+                click.echo(f"Successfully updated to version {latest_version}!")
+                click.echo("Please restart the CLI to use the new version.")
+                update_cache_timestamp()
+            else:
+                click.echo("Update installation failed. Please update manually:", err=True)
+                click.echo(f"  pip install --upgrade git+https://github.com/Shortcuty/Shortcuty-CLI.git", err=True)
+                ctx.exit(1)
+        else:
+            click.echo("You are already running the latest version!")
+            update_cache_timestamp()
+    except Exception as e:
+        click.echo(f"Error updating: {e}", err=True)
         ctx.exit(1)
 
 

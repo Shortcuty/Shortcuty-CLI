@@ -1,4 +1,4 @@
-# Shortcuty Creator API CLI
+# Shortcuty Creator CLI
 
 A command-line interface for managing shortcuts via the Shortcuty Creator API v1.
 

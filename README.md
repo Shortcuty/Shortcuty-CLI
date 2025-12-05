@@ -11,7 +11,6 @@ A command-line interface for managing shortcuts via the Shortcuty Creator API v1
 - View shortcut history and changelogs
 - List and filter your shortcuts
 - JSON output support for scripting
-- Multiple authentication methods
 
 ## Prerequisites
 

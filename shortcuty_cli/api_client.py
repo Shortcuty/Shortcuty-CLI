@@ -185,7 +185,7 @@ class ShortcutyAPIClient:
         category: Optional[str] = None,
         requires_ios26_ai: Optional[bool] = None,
         updater_type: Optional[str] = None,
-        submit: Optional[bool] = None
+        auto_submit: Optional[bool] = None
     ) -> Dict[str, Any]:
         """Create a new shortcut."""
         validate_icloud_url(sharing_url)
@@ -198,8 +198,8 @@ class ShortcutyAPIClient:
             data["requires_ios26_ai"] = requires_ios26_ai
         if updater_type is not None:
             data["updater_type"] = updater_type
-        if submit is not None:
-            data["submit"] = submit
+        if auto_submit is not None:
+            data["auto_submit"] = auto_submit
         
         return self._request("POST", "/shortcuts", json=data)
     
@@ -226,13 +226,12 @@ class ShortcutyAPIClient:
     def update_shortcut(
         self,
         uuid: str,
-        name: Optional[str] = None,
         description: Optional[str] = None,
         sharing_url: Optional[str] = None,
         category: Optional[str] = None,
         requires_ios26_ai: Optional[bool] = None,
         updater_type: Optional[str] = None,
-        new_version: Optional[str] = None,
+        version: Optional[str] = None,
         changelog: Optional[str] = None
     ) -> Dict[str, Any]:
         """Update an existing shortcut."""
@@ -240,8 +239,6 @@ class ShortcutyAPIClient:
         if sharing_url is not None:
             validate_icloud_url(sharing_url)
         data = {}
-        if name is not None:
-            data["name"] = name
         if description is not None:
             data["description"] = description
         if sharing_url is not None:
@@ -252,8 +249,8 @@ class ShortcutyAPIClient:
             data["requires_ios26_ai"] = requires_ios26_ai
         if updater_type is not None:
             data["updater_type"] = updater_type
-        if new_version is not None:
-            data["new_version"] = new_version
+        if version is not None:
+            data["version"] = version
         if changelog is not None:
             data["changelog"] = changelog
         

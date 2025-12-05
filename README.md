@@ -77,7 +77,7 @@ Create and immediately submit for review:
 shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
   --description "My awesome shortcut" \
   --category "Productivity" \
-  --submit
+  --auto-submit
 ```
 
 Additional options:
@@ -88,7 +88,7 @@ shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
   --category "Productivity" \
   --requires-ios26-ai \
   --updater-type shortcuty \
-  --submit
+  --auto-submit
 ```
 
 ### List Your Shortcuts
@@ -118,18 +118,17 @@ shortcuty submit <uuid>
 ### Update Shortcut
 
 ```bash
-shortcuty update <uuid> --name "New Name" --description "New description"
+shortcuty update <uuid> --description "New description"
 ```
 
 You can update multiple fields at once:
 
 ```bash
 shortcuty update <uuid> \
-  --name "Updated Name" \
   --description "Updated description" \
   --sharing-url "https://www.icloud.com/shortcuts/new-url" \
   --category "Productivity" \
-  --new-version "2.0" \
+  --version "2.0" \
   --changelog "What's new in this version"
 ```
 

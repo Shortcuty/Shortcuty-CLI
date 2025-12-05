@@ -97,10 +97,10 @@ def categories(ctx):
     type=click.Choice(["shortcuty", "third_party", "none"], case_sensitive=False),
     help="Updater type",
 )
-@click.option("--submit", is_flag=True, help="Submit for review immediately")
+@click.option("--auto-submit", is_flag=True, help="Submit for review immediately")
 @click.pass_context
 @require_api_key
-def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_type, submit):
+def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_type, auto_submit):
     """Create a new shortcut."""
     try:
         client = ctx.obj["client"]
@@ -110,7 +110,7 @@ def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_t
             category=category,
             requires_ios26_ai=requires_ios26_ai if requires_ios26_ai else None,
             updater_type=updater_type,
-            submit=submit if submit else None,
+            auto_submit=auto_submit if auto_submit else None,
         )
         shortcut = response.get("shortcut", {})
         click.echo(format_shortcut(shortcut, ctx.obj["json_output"]))
@@ -182,7 +182,6 @@ def submit(ctx, uuid):
 
 @cli.command()
 @click.argument("uuid")
-@click.option("--name", help="Shortcut name")
 @click.option("--description", help="Shortcut description")
 @click.option("--sharing-url", help="iCloud sharing URL")
 @click.option("--category", help="Category name")
@@ -192,24 +191,23 @@ def submit(ctx, uuid):
     type=click.Choice(["shortcuty", "third_party", "none"], case_sensitive=False),
     help="Updater type",
 )
-@click.option("--new-version", help="New version string (e.g., '2.0')")
+@click.option("--version", help="Version string (e.g., '2.0')")
 @click.option("--changelog", help="Changelog text")
 @click.pass_context
 @require_api_key
 def update(
     ctx,
     uuid,
-    name,
     description,
     sharing_url,
     category,
     requires_ios26_ai,
     updater_type,
-    new_version,
+    version,
     changelog,
 ):
     """Update an existing shortcut."""
-    if not any([name, description, sharing_url, category, requires_ios26_ai, updater_type, new_version, changelog]):
+    if not any([description, sharing_url, category, requires_ios26_ai, updater_type, version, changelog]):
         click.echo("Error: At least one update field must be provided.", err=True)
         ctx.exit(1)
     
@@ -217,13 +215,12 @@ def update(
         client = ctx.obj["client"]
         response = client.update_shortcut(
             uuid=uuid,
-            name=name,
             description=description,
             sharing_url=sharing_url,
             category=category,
             requires_ios26_ai=requires_ios26_ai if requires_ios26_ai else None,
             updater_type=updater_type,
-            new_version=new_version,
+            version=version,
             changelog=changelog,
         )
         click.echo(format_message(response, ctx.obj["json_output"]))
@@ -279,7 +276,7 @@ def check_updates(ctx):
         if update_info:
             latest_version = update_info.get("version", "unknown")
             click.echo(f"\nUpdate available: {current_version} -> {latest_version}")
-            click.echo(f"Run 'shortcuty update' to install the update.")
+            click.echo(f"Run 'shortcuty cli-update' to install the update.")
             update_cache_timestamp()
         else:
             click.echo("You are already running the latest version!")
@@ -289,9 +286,9 @@ def check_updates(ctx):
         ctx.exit(1)
 
 
-@cli.command()
+@cli.command(name="cli-update")
 @click.pass_context
-def update(ctx):
+def cli_update(ctx):
     """Update to the latest version."""
     current_version = get_current_version()
     click.echo(f"Current version: {current_version}")

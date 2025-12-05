@@ -100,8 +100,8 @@ def format_shortcut_details(response: Dict[str, Any], json_output: bool = False)
         lines.append(f"\nLatest Update:")
         if isinstance(latest_update, dict):
             update_lines = []
-            if latest_update.get('new_version'):
-                update_lines.append(f"  Version: {latest_update['new_version']}")
+            if latest_update.get('version'):
+                update_lines.append(f"  Version: {latest_update['version']}")
             if latest_update.get('changelog'):
                 update_lines.append(f"  Changelog: {latest_update['changelog']}")
             if latest_update.get('status'):
@@ -162,8 +162,8 @@ def format_history(response: Dict[str, Any], json_output: bool = False) -> str:
                 change_items.append(f"Requires iOS 26 AI: {changes['requires_ios26_ai']}")
             if changes.get('updater_type'):
                 change_items.append(f"Updater Type: {changes['updater_type']}")
-            if changes.get('new_version'):
-                change_items.append(f"Version: {changes['new_version']}")
+            if changes.get('version'):
+                change_items.append(f"Version: {changes['version']}")
             
             if change_items:
                 lines.append(f"  Changes: {', '.join(change_items)}")

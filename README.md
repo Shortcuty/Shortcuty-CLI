@@ -143,6 +143,32 @@ shortcuty upload-screenshot <uuid> /path/to/screenshot.png
 shortcuty delete-screenshot <uuid> <screenshot_id>
 ```
 
+### Check for Updates
+
+Check if a newer version of the CLI is available:
+
+```bash
+shortcuty check-updates
+```
+
+### Update CLI
+
+Update to the latest version of the CLI:
+
+```bash
+shortcuty cli-update
+```
+
+## Global Options
+
+### Skip Update Check
+
+Disable automatic update checks for a command:
+
+```bash
+shortcuty --no-check-updates list
+```
+
 ## JSON Output
 
 Add `--json` flag to any command for JSON output (useful for scripting):

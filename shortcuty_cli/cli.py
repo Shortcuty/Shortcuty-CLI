@@ -151,14 +151,14 @@ def get(ctx, uuid):
 
 
 @cli.command()
-@click.argument("identifier")
+@click.argument("uuid")
 @click.pass_context
 @require_api_key
-def history(ctx, identifier):
+def history(ctx, uuid):
     """Get version history for a shortcut."""
     try:
         client = ctx.obj["client"]
-        response = client.get_shortcut_history(identifier)
+        response = client.get_shortcut_history(uuid)
         click.echo(format_history(response, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
         click.echo(f"Error: {e}", err=True)

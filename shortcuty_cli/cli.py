@@ -29,7 +29,7 @@ def require_api_key(f):
     @functools.wraps(f)
     def wrapper(ctx, *args, **kwargs):
         if not ctx.obj["api_key"]:
-            click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY.", err=True)
+            click.echo("Error: API key required. Use --api-key or set SHORTCUTY_API_KEY environment variable.", err=True)
             ctx.exit(1)
         return f(ctx, *args, **kwargs)
     return wrapper
@@ -39,7 +39,7 @@ def require_api_key(f):
 @click.option(
     "--api-key",
     envvar="SHORTCUTY_API_KEY",
-    help="API key for authentication (can also use SHORTCUTY_API_KEY env var or config file)",
+    help="API key for authentication (can also use SHORTCUTY_API_KEY env var)",
 )
 @click.option(
     "--json",

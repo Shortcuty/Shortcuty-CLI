@@ -39,18 +39,11 @@ You should see the CLI help menu. If you get a "command not found" error, make s
 
 The CLI supports multiple ways to provide your API key:
 
-1. **Config file** (recommended): `~/.shortcuty/config.json`
-   ```json
-   {
-     "api_key": "your-api-key-here"
-   }
-   ```
+1. **Environment variable**: `SHORTCUTY_API_KEY`
 
-2. **Environment variable**: `SHORTCUTY_API_KEY`
+2. **Command-line flag**: `--api-key`
 
-3. **Command-line flag**: `--api-key`
-
-The CLI checks these in order: CLI flag > Environment variable > Config file.
+The CLI checks these in order: CLI flag > Environment variable.
 
 ## Usage
 

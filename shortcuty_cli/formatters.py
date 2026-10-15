@@ -25,12 +25,14 @@ def format_shortcut(shortcut: Dict[str, Any], json_output: bool = False) -> str:
     if json_output:
         return format_json(shortcut)
     
+    description = shortcut.get("description") or ""
     lines = [
         f"UUID: {shortcut.get('uuid', 'N/A')}",
         f"Name: {shortcut.get('name', 'N/A')}",
         f"Status: {shortcut.get('status', 'N/A')}",
+        f"Visibility: {shortcut.get('visibility', 'N/A')}",
         f"Category: {shortcut.get('category', 'N/A') or 'None'}",
-        f"Description: {shortcut.get('description', 'N/A')[:100]}{'...' if len(shortcut.get('description', '')) > 100 else ''}",
+        f"Description: {description[:100]}{'...' if len(description) > 100 else ''}",
         f"Version: {shortcut.get('version', 'N/A')}",
         f"Downloads: {shortcut.get('downloads', 0)}",
         f"Likes: {shortcut.get('likes_count', 0)}",
@@ -162,8 +164,8 @@ def format_history(response: Dict[str, Any], json_output: bool = False) -> str:
                 change_items.append(f"Requires iOS 26 AI: {changes['requires_ios26_ai']}")
             if changes.get('updater_type'):
                 change_items.append(f"Updater Type: {changes['updater_type']}")
-            if changes.get('version'):
-                change_items.append(f"Version: {changes['version']}")
+            if changes.get('new_version', changes.get('version')):
+                change_items.append(f"Version: {changes.get('new_version', changes.get('version'))}")
             
             if change_items:
                 lines.append(f"  Changes: {', '.join(change_items)}")
@@ -182,9 +184,11 @@ def format_message(response: Dict[str, Any], json_output: bool = False) -> str:
         return format_json(response)
     
     message = response.get("message", "Success")
-    if "update_id" in response:
-        return f"{message} (Update ID: {response['update_id']})"
-    return message
+    details = []
+    for key in ("update_id", "status", "scan_queued", "replaced_pending"):
+        if key in response:
+            details.append(f"{key}: {response[key]}")
+    return message + (" (" + ", ".join(details) + ")" if details else "")
 
 
 def format_screenshot(response: Dict[str, Any], json_output: bool = False) -> str:
@@ -198,7 +202,7 @@ def format_screenshot(response: Dict[str, Any], json_output: bool = False) -> st
         f"  ID: {screenshot.get('id', 'N/A')}",
         f"  Filename: {screenshot.get('filename', 'N/A')}",
         f"  URL: {screenshot.get('url', 'N/A')}",
-        f"  Uploaded: {screenshot.get('uploaded_at', 'N/A')}",
+        f"  Uploaded: {screenshot.get('created_at', screenshot.get('uploaded_at', 'N/A'))}",
     ]
     return "\n".join(lines)
 

@@ -104,6 +104,22 @@ class SigningTests(OfflineTest):
         self.run_sign(output=self.source, force=True)
         self.assertEqual(self.source.read_bytes(), self.signed)
 
+    def test_upload_is_closed_before_replacing_input(self):
+        original_open = Path.open
+        original_replace = os.replace
+        uploads = []
+        def track_open(path, *args, **kwargs):
+            handle = original_open(path, *args, **kwargs)
+            if path == self.source:
+                uploads.append(handle)
+            return handle
+        def check_replace(source, destination):
+            self.assertTrue(uploads[0].closed)
+            return original_replace(source, destination)
+        with patch.object(Path, "open", track_open), patch("shortcuty_cli.signing.os.replace", check_replace):
+            self.run_sign(output=self.source, force=True)
+        self.assertEqual(self.source.read_bytes(), self.signed)
+
     def test_no_clobber_if_destination_appears_during_download(self):
         reply = self.signed_response()
         def chunks(_size):

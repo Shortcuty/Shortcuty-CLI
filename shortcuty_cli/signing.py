@@ -106,6 +106,9 @@ def sign_shortcut(file_path, output=None, force=False, timeout=300):
                 stream=True,
             )
             try:
+                # The upload is consumed before response headers arrive. Release its
+                # handle so --force can replace the input on Windows as well.
+                upload.close()
                 content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
                 if response.status_code != 200 or content_type != "application/octet-stream":
                     raise ShortcutyAPIError("Expected HTTP 200 signed binary file from the signer")

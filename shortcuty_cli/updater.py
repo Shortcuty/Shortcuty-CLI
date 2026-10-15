@@ -1,6 +1,8 @@
 """Auto-update functionality for Shortcuty CLI."""
 
+import ast
 import json
+import sys
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,11 +12,12 @@ import requests
 from packaging import version
 
 from shortcuty_cli import __version__
+from shortcuty_cli.http import ShortcutyAPIError
 from shortcuty_cli.config import CONFIG_DIR
 
 
 CACHE_FILE = CONFIG_DIR / "last_update_check.json"
-VERSION_FILE_URL = "https://raw.githubusercontent.com/Shortcuty/Shortcuty-CLI/main/VERSION"
+VERSION_FILE_URL = "https://raw.githubusercontent.com/Shortcuty/Shortcuty-CLI/main/shortcuty_cli/__init__.py"
 GITHUB_INSTALL_URL = "git+https://github.com/Shortcuty/Shortcuty-CLI.git"
 CACHE_DURATION_HOURS = 24
 
@@ -44,8 +47,8 @@ def should_check_updates() -> bool:
             last_check_time = datetime.fromisoformat(last_check)
             time_since_check = datetime.now() - last_check_time
             
-            return time_since_check >= timedelta(hours=CACHE_DURATION_HOURS)
-    except (json.JSONDecodeError, IOError, ValueError, KeyError):
+            return time_since_check < timedelta(0) or time_since_check >= timedelta(hours=CACHE_DURATION_HOURS)
+    except (json.JSONDecodeError, IOError, ValueError, KeyError, TypeError, AttributeError):
         # If cache is invalid, regenerate it
         return True
 
@@ -66,34 +69,38 @@ def update_cache_timestamp() -> None:
 
 def check_for_updates() -> Optional[Dict[str, Any]]:
     """
-    Check for available updates by fetching version from text file.
+    Read version metadata from repository source without executing that source.
     
     Returns:
         dict with 'version' and 'current_version' keys if update available, None otherwise
     """
     try:
-        response = requests.get(VERSION_FILE_URL, timeout=5)
-        response.raise_for_status()
-        
-        # Get version from text file (strip whitespace and 'v' prefix if present)
-        latest_version = response.text.strip().lstrip("v")
-        current_version = get_current_version()
-        
-        # Compare versions
+        response = requests.get(VERSION_FILE_URL, timeout=(5, 5), allow_redirects=False)
         try:
-            if version.parse(latest_version) > version.parse(current_version):
-                return {
-                    "version": latest_version,
-                    "current_version": current_version
-                }
-        except (ValueError, version.InvalidVersion):
-            # If version parsing fails, skip update check
+            if response.status_code != 200:
+                raise ShortcutyAPIError(f"Update check failed: HTTP {response.status_code}")
+            if len(response.content) > 65536:
+                raise ValueError("Version source too large")
+            module = ast.parse(response.text)
+            latest_version = None
+            for node in module.body:
+                if (isinstance(node, ast.Assign)
+                        and any(isinstance(target, ast.Name) and target.id == "__version__"
+                                for target in node.targets)):
+                    latest_version = ast.literal_eval(node.value)
+            if not isinstance(latest_version, str):
+                raise ValueError("Missing version")
+            latest = version.Version(latest_version)
+            current_version = get_current_version()
+            if latest > version.Version(current_version):
+                return {"version": str(latest), "current_version": current_version}
             return None
-        
-        return None
-    except (requests.exceptions.RequestException, ValueError):
-        # Network errors or invalid version format - fail silently
-        return None
+        finally:
+            response.close()
+    except requests.exceptions.RequestException:
+        raise ShortcutyAPIError("Unable to check for updates: network request failed") from None
+    except (ValueError, SyntaxError, TypeError):
+        raise ShortcutyAPIError("Unable to check for updates: invalid version metadata") from None
 
 
 def install_update() -> bool:
@@ -105,7 +112,7 @@ def install_update() -> bool:
     """
     try:
         result = subprocess.run(
-            ["pip", "install", "--upgrade", GITHUB_INSTALL_URL],
+            [sys.executable, "-m", "pip", "install", "--upgrade", GITHUB_INSTALL_URL],
             capture_output=True,
             text=True,
             timeout=120
@@ -125,8 +132,8 @@ def show_update_notification(update_info: Dict[str, Any]) -> None:
     current = update_info.get("current_version", "unknown")
     latest = update_info.get("version", "unknown")
     
-    print(f"\n⚠️  Update available: {current} -> {latest}")
-    print(f"   Run 'shortcuty check-updates' to update\n")
+    print(f"\nUpdate available: {current} -> {latest}", file=sys.stderr)
+    print("   Run 'shortcuty cli-update' to install it\n", file=sys.stderr)
 
 
 def prompt_for_update(update_info: Dict[str, Any]) -> bool:

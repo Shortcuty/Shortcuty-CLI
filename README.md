@@ -11,6 +11,7 @@ A command-line interface for managing shortcuts via the Shortcuty Creator API v1
 - View shortcut history and changelogs
 - List and filter your shortcuts
 - JSON output support for scripting
+- Sign local unsigned `.shortcut` files without an API key
 
 ## Prerequisites
 
@@ -44,6 +45,11 @@ The CLI supports multiple ways to provide your API key:
 2. **Command-line flag**: `--api-key`
 
 The CLI checks these in order: CLI flag > Environment variable.
+
+Prefer the environment variable: command-line keys may be saved in shell history
+or visible in process listings. The CLI does not save API keys in a config file.
+`~/.shortcuty/last_update_check.json` contains only an update-check timestamp.
+Categories and signing do not require an API key.
 
 ## Usage
 
@@ -82,6 +88,8 @@ shortcuty create --sharing-url "https://www.icloud.com/shortcuts/abc123" \
   --updater-type shortcuty \
   --auto-submit
 ```
+
+Use `--visibility private` to create a private shortcut. The default is public.
 
 ### List Your Shortcuts
 
@@ -124,17 +132,72 @@ shortcuty update <uuid> \
   --changelog "What's new in this version"
 ```
 
+Set a boolean to false or clear an optional field explicitly:
+
+```bash
+shortcuty update <uuid> --no-requires-ios26-ai --visibility private
+shortcuty update <uuid> --clear-description --clear-category
+```
+
+`--clear-description` and `--clear-category` send JSON `null`; they require the
+default JSON body format. An empty string can also be sent with `--description ""`.
+Use either a field value or its clear option in one command.
+
+A new update replaces the entire pending proposal. Include all unapproved changes
+and release notes you want to keep. Successful submission or an update accepted
+for review does not mean approval: inspect the message, `status`, and `scan_queued`,
+then use `get` or `history` to check progress.
+
 ### Upload Screenshot
 
 ```bash
 shortcuty upload-screenshot <uuid> /path/to/screenshot.png
 ```
 
+PNG, JPEG, and GIF files are supported. The API allows at most five screenshots.
+
 ### Delete Screenshot
 
 ```bash
 shortcuty delete-screenshot <uuid> <screenshot_id>
 ```
+
+### Sign a Local Shortcut
+
+```bash
+shortcuty sign "My Shortcut.shortcut"
+shortcuty sign "My Shortcut.shortcut" --output "Signed/My Shortcut.shortcut"
+shortcuty sign "My Shortcut.shortcut" --output "result.shortcut" --force
+shortcuty --json sign "My Shortcut.shortcut" --timeout 900
+```
+
+The CLI uploads the file to `https://sign.shortcuty.app/api/v1/sign` as multipart
+field `file`, then streams the signed download to disk. No API key is sent.
+Only sign files you intend to upload to that service.
+
+By default, the output uses the server's filename in the current directory,
+including its Unicode `filename*` value (for example `My Shortcut — Signed.shortcut`).
+Path components and unsafe filename characters are removed. If the header is
+missing, a `— Signed.shortcut` name is derived from the input.
+Use `--output` to choose a path; its parent directory must already exist.
+
+Existing files and the input file are protected unless `--force` is supplied.
+The CLI writes a temporary file beside the destination and commits it atomically
+after checking the `AEA1` marker, response length, and SHA-256 metadata when
+provided. These checks detect damaged transfers; they do not cryptographically
+verify Apple's signature. Failed transfers leave existing files intact.
+
+Uploads and downloads are streamed, with no invented client file-size limit.
+A server/proxy `413` response reports its size limit. Empty files are rejected
+locally; the server validates the workflow and rejects already-signed files.
+Signing is synchronous and may wait in a queue. The default read timeout is 300
+seconds (`sign --timeout` changes it); the connection timeout is 10 seconds.
+Read timeouts measure inactivity, not the total command duration. The server's
+90-second signing-process timeout excludes upload and queue wait.
+The CLI never retries signing automatically.
+
+See the [Signing API documentation](https://github.com/Shortcuty/Signing-Server-API-Documentation)
+for the full contract and error codes.
 
 ### Check for Updates
 
@@ -154,6 +217,38 @@ shortcuty cli-update
 
 ## Global Options
 
+Global options appear before the command name. `shortcuty --version` displays
+the installed CLI version; `shortcuty update --version` sets a shortcut version.
+
+### Request Body Format
+
+Create and update default to JSON. URL-encoded Form uses the same field names:
+
+```bash
+shortcuty --body-format form update <uuid> --version "1.2.0" --changelog "Bug fixes"
+```
+
+JSON booleans remain booleans; Form booleans are sent as `true` or `false` text.
+Screenshot uploads and signing always use multipart with a generated boundary.
+
+### Timeouts and Errors
+
+```bash
+shortcuty --timeout 120 list --page 2 --per-page 20
+```
+
+Creator API requests default to a 10-second connection timeout and a 60-second
+read timeout. `--timeout` changes the read timeout. Pages and page sizes must be
+positive; pagination metadata is preserved in JSON results.
+
+Requests are made once, with no automatic retries or redirects. Errors return a
+nonzero exit code and include HTTP status and any server error code/message;
+known API keys and Bearer values are redacted from diagnostic messages.
+Invalid or non-JSON responses are reported without dumping server HTML.
+After a timeout, lost response, or server error, a write may already have saved
+data. Check before repeating it: use `list` after creation, `get <uuid>` after
+submission, and `history <uuid>` after an update.
+
 ### Skip Update Check
 
 Disable automatic update checks for a command:
@@ -161,6 +256,11 @@ Disable automatic update checks for a command:
 ```bash
 shortcuty --no-check-updates list
 ```
+
+Automatic checks run after successful human-readable Creator commands. Help,
+version, JSON output, and signing skip them. Notifications go to stderr.
+Explicit `check-updates` failures report an error rather than claiming the CLI
+is current. `cli-update` installs GitHub `main` using the running Python's pip.
 
 ## JSON Output
 
@@ -176,7 +276,18 @@ shortcuty --json categories
 
 ## Getting Your API Key
 
-Visit your Account Settings on [shortcuty.app](https://shortcuty.app) and create an API key in the API Key Management section.
+Visit your Account Settings on [browse.shortcuty.app](https://browse.shortcuty.app) and create an API key in the API Key Management section.
+
+## Development and Tests
+
+```bash
+python -m pip install -e .
+python -m unittest discover -v
+```
+
+Tests use synthetic workflows, fake HTTP responses, and a network guard. They do
+not need an account, real API key, Apple signer, or service mutations. CI covers
+Python 3.8 and 3.12, including Windows and macOS.
 
 ## Documentation
 

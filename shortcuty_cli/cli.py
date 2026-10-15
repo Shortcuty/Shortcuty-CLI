@@ -1,9 +1,13 @@
 """Command-line interface for Shortcuty Creator API."""
 
 import functools
+import math
 import click
 from shortcuty_cli.api_client import ShortcutyAPIClient, ShortcutyAPIError, validate_image_file
 from shortcuty_cli.config import get_api_key
+from shortcuty_cli.signing import sign_shortcut
+from shortcuty_cli import __version__
+from shortcuty_cli.formatters import format_json
 from shortcuty_cli.updater import (
     check_for_updates,
     should_check_updates,
@@ -24,6 +28,12 @@ from shortcuty_cli.formatters import (
 )
 
 
+def finite_timeout(ctx, param, value):
+    if not math.isfinite(value):
+        raise click.BadParameter("Timeout must be finite", ctx=ctx, param=param)
+    return value
+
+
 def require_api_key(f):
     """Decorator to require API key for a command."""
     @functools.wraps(f)
@@ -36,6 +46,9 @@ def require_api_key(f):
 
 
 @click.group()
+@click.version_option(version=__version__)
+@click.option("--timeout", type=click.FloatRange(min=0, min_open=True), callback=finite_timeout, default=60, show_default=True, help="API read timeout in seconds (connect timeout: 10s)")
+@click.option("--body-format", type=click.Choice(["json", "form"]), default="json", show_default=True, help="Create/update request encoding")
 @click.option(
     "--api-key",
     envvar="SHORTCUTY_API_KEY",
@@ -54,23 +67,31 @@ def require_api_key(f):
     help="Skip automatic update check",
 )
 @click.pass_context
-def cli(ctx, api_key, json_output, no_check_updates):
+def cli(ctx, api_key, json_output, no_check_updates, timeout, body_format):
     """Shortcuty Creator API CLI - Manage shortcuts programmatically."""
     ctx.ensure_object(dict)
     api_key = get_api_key(api_key)
     ctx.obj["api_key"] = api_key
     ctx.obj["json_output"] = json_output
-    ctx.obj["client"] = ShortcutyAPIClient(api_key=api_key)
+    ctx.obj["client"] = ShortcutyAPIClient(api_key=api_key, timeout=timeout, body_format=body_format)
+    ctx.obj["no_check_updates"] = no_check_updates
+    ctx.call_on_close(ctx.obj["client"].close)
     
-    # Check for updates (non-blocking, with error handling)
-    if not no_check_updates and should_check_updates():
+
+
+@cli.result_callback()
+@click.pass_context
+def automatic_update_check(ctx, result, **kwargs):
+    """Check after successful commands; keep help, signing and JSON offline/clean."""
+    if (not ctx.obj["no_check_updates"] and not ctx.obj["json_output"]
+            and ctx.invoked_subcommand not in ("sign", "check-updates", "cli-update")
+            and should_check_updates()):
         try:
             update_info = check_for_updates()
             if update_info:
                 show_update_notification(update_info)
             update_cache_timestamp()
         except Exception:
-            # Silently fail - don't interrupt CLI usage if update check fails
             pass
 
 
@@ -79,8 +100,11 @@ def cli(ctx, api_key, json_output, no_check_updates):
 def categories(ctx):
     """List all available categories (public endpoint)."""
     try:
-        client = ShortcutyAPIClient()  # No auth needed for public endpoint
-        categories_list = client.get_categories()
+        client = ShortcutyAPIClient(timeout=ctx.obj["client"].timeout)
+        try:
+            categories_list = client.get_categories()
+        finally:
+            client.close()
         click.echo(format_categories(categories_list, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
         click.echo(f"Error: {e}", err=True)
@@ -91,7 +115,8 @@ def categories(ctx):
 @click.option("--sharing-url", required=True, help="iCloud sharing URL")
 @click.option("--description", help="Shortcut description")
 @click.option("--category", help="Category name")
-@click.option("--requires-ios26-ai", is_flag=True, help="Requires iOS 26 AI features")
+@click.option("--requires-ios26-ai/--no-requires-ios26-ai", default=None, help="Whether iOS 26 AI features are required")
+@click.option("--visibility", type=click.Choice(["public", "private"]), help="Shortcut visibility")
 @click.option(
     "--updater-type",
     type=click.Choice(["shortcuty", "third_party", "none"], case_sensitive=False),
@@ -100,7 +125,7 @@ def categories(ctx):
 @click.option("--auto-submit", is_flag=True, help="Submit for review immediately")
 @click.pass_context
 @require_api_key
-def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_type, auto_submit):
+def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_type, auto_submit, visibility):
     """Create a new shortcut."""
     try:
         client = ctx.obj["client"]
@@ -108,11 +133,14 @@ def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_t
             sharing_url=sharing_url,
             description=description,
             category=category,
-            requires_ios26_ai=requires_ios26_ai if requires_ios26_ai else None,
+            requires_ios26_ai=requires_ios26_ai,
             updater_type=updater_type,
             auto_submit=auto_submit if auto_submit else None,
+            visibility=visibility,
         )
         shortcut = response.get("shortcut", {})
+        if not ctx.obj["json_output"]:
+            click.echo(format_message(response))
         click.echo(format_shortcut(shortcut, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
         click.echo(f"Error: {e}", err=True)
@@ -120,8 +148,8 @@ def create(ctx, sharing_url, description, category, requires_ios26_ai, updater_t
 
 
 @cli.command()
-@click.option("--page", type=int, default=1, help="Page number")
-@click.option("--per-page", type=int, default=20, help="Items per page")
+@click.option("--page", type=click.IntRange(min=1), default=1, help="Page number")
+@click.option("--per-page", type=click.IntRange(min=1), default=20, help="Items per page")
 @click.pass_context
 @require_api_key
 def list(ctx, page, per_page):
@@ -185,7 +213,8 @@ def submit(ctx, uuid):
 @click.option("--description", help="Shortcut description")
 @click.option("--sharing-url", help="iCloud sharing URL")
 @click.option("--category", help="Category name")
-@click.option("--requires-ios26-ai", is_flag=True, help="Requires iOS 26 AI features")
+@click.option("--requires-ios26-ai/--no-requires-ios26-ai", default=None, help="Whether iOS 26 AI features are required")
+@click.option("--visibility", type=click.Choice(["public", "private"]), help="Shortcut visibility")
 @click.option(
     "--updater-type",
     type=click.Choice(["shortcuty", "third_party", "none"], case_sensitive=False),
@@ -193,6 +222,8 @@ def submit(ctx, uuid):
 )
 @click.option("--version", help="Version string (e.g., '2.0')")
 @click.option("--changelog", help="Changelog text")
+@click.option("--clear-description", is_flag=True, help="Set description to JSON null")
+@click.option("--clear-category", is_flag=True, help="Set category to JSON null")
 @click.pass_context
 @require_api_key
 def update(
@@ -205,9 +236,16 @@ def update(
     updater_type,
     version,
     changelog,
+    visibility,
+    clear_description,
+    clear_category,
 ):
-    """Update an existing shortcut."""
-    if not any([description, sharing_url, category, requires_ios26_ai, updater_type, version, changelog]):
+    """Update a shortcut. Send all changes to keep when replacing a pending proposal."""
+    if (clear_description and description is not None) or (clear_category and category is not None):
+        raise click.UsageError("Use either a field value or its --clear option")
+    if not (any(value is not None for value in
+                [description, sharing_url, category, requires_ios26_ai, updater_type, version, changelog, visibility])
+            or clear_description or clear_category):
         click.echo("Error: At least one update field must be provided.", err=True)
         ctx.exit(1)
     
@@ -218,10 +256,13 @@ def update(
             description=description,
             sharing_url=sharing_url,
             category=category,
-            requires_ios26_ai=requires_ios26_ai if requires_ios26_ai else None,
+            requires_ios26_ai=requires_ios26_ai,
             updater_type=updater_type,
             version=version,
             changelog=changelog,
+            visibility=visibility,
+            clear_description=clear_description,
+            clear_category=clear_category,
         )
         click.echo(format_message(response, ctx.obj["json_output"]))
     except ShortcutyAPIError as e:
@@ -231,7 +272,7 @@ def update(
 
 @cli.command()
 @click.argument("uuid")
-@click.argument("file", type=click.Path(exists=True, readable=True))
+@click.argument("file", type=click.Path(exists=True, readable=True, dir_okay=False))
 @click.pass_context
 @require_api_key
 def upload_screenshot(ctx, uuid, file):
@@ -249,7 +290,7 @@ def upload_screenshot(ctx, uuid, file):
 
 @cli.command()
 @click.argument("uuid")
-@click.argument("screenshot_id", type=int)
+@click.argument("screenshot_id", type=click.IntRange(min=1))
 @click.pass_context
 @require_api_key
 def delete_screenshot(ctx, uuid, screenshot_id):
@@ -264,56 +305,53 @@ def delete_screenshot(ctx, uuid, screenshot_id):
 
 
 @cli.command()
+@click.argument("file", type=click.Path(exists=True, readable=True, dir_okay=False))
+@click.option("--output", "-o", type=click.Path(dir_okay=False), help="Output file path (default: sanitized server filename in current directory)")
+@click.option("--force", is_flag=True, help="Allow replacing an existing output, including the input")
+@click.option("--timeout", type=click.FloatRange(min=0, min_open=True), callback=finite_timeout, default=300, show_default=True, help="Signing read timeout in seconds, including queue wait")
+@click.pass_context
+def sign(ctx, file, output, force, timeout):
+    """Upload an unsigned .shortcut and save its signed file. No API key required."""
+    click.echo("Signing shortcut; waiting for the server...", err=True)
+    try:
+        result = sign_shortcut(file, output=output, force=force, timeout=timeout)
+        click.echo(format_json(result) if ctx.obj["json_output"] else "Signed shortcut saved to " + result["output"])
+    except ShortcutyAPIError as error:
+        raise click.ClickException(str(error)) from None
+
+
+@cli.command()
 @click.pass_context
 def check_updates(ctx):
     """Check for available updates."""
-    current_version = get_current_version()
-    click.echo(f"Current version: {current_version}")
-    click.echo("Checking for updates...")
-    
     try:
         update_info = check_for_updates()
+        update_cache_timestamp()
+        result = {"current_version": get_current_version(), "update_available": update_info is not None}
         if update_info:
-            latest_version = update_info.get("version", "unknown")
-            click.echo(f"\nUpdate available: {current_version} -> {latest_version}")
-            click.echo(f"Run 'shortcuty cli-update' to install the update.")
-            update_cache_timestamp()
+            result.update(update_info)
+        if ctx.obj["json_output"]:
+            click.echo(format_json(result))
+        elif update_info:
+            click.echo(f"Update available: {result['current_version']} -> {result['version']}")
+            click.echo("Run 'shortcuty cli-update' to install it.")
         else:
-            click.echo("You are already running the latest version!")
-            update_cache_timestamp()
-    except Exception as e:
-        click.echo(f"Error checking for updates: {e}", err=True)
-        ctx.exit(1)
+            click.echo(f"Already running the latest version ({result['current_version']}).")
+    except ShortcutyAPIError as error:
+        raise click.ClickException(str(error)) from None
 
 
 @cli.command(name="cli-update")
 @click.pass_context
 def cli_update(ctx):
-    """Update to the latest version."""
-    current_version = get_current_version()
-    click.echo(f"Current version: {current_version}")
-    click.echo("Checking for updates...")
-    
-    try:
-        update_info = check_for_updates()
-        if update_info:
-            latest_version = update_info.get("version", "unknown")
-            click.echo(f"\nUpdating from {current_version} to {latest_version}...")
-            
-            if install_update():
-                click.echo(f"Successfully updated to version {latest_version}!")
-                click.echo("Please restart the CLI to use the new version.")
-                update_cache_timestamp()
-            else:
-                click.echo("Update installation failed. Please update manually:", err=True)
-                click.echo(f"  pip install --upgrade git+https://github.com/Shortcuty/Shortcuty-CLI.git", err=True)
-                ctx.exit(1)
-        else:
-            click.echo("You are already running the latest version!")
-            update_cache_timestamp()
-    except Exception as e:
-        click.echo(f"Error updating: {e}", err=True)
-        ctx.exit(1)
+    """Install the current GitHub main in this Python environment."""
+    click.echo("Installing CLI from GitHub...", err=True)
+    if not install_update():
+        raise click.ClickException("Installation failed. Run python -m pip install --upgrade "
+                                   "git+https://github.com/Shortcuty/Shortcuty-CLI.git")
+    update_cache_timestamp()
+    result = {"installed": True, "source": "https://github.com/Shortcuty/Shortcuty-CLI"}
+    click.echo(format_json(result) if ctx.obj["json_output"] else "CLI updated. Restart the CLI to use it.")
 
 
 def main():

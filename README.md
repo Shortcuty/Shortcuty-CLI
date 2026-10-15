@@ -97,6 +97,8 @@ Use `--visibility private` to create a private shortcut. The default is public.
 shortcuty list --page 1 --per-page 20
 ```
 
+Page numbers and page sizes must be positive.
+
 ### Get Shortcut Details
 
 ```bash
@@ -171,33 +173,20 @@ shortcuty sign "My Shortcut.shortcut" --output "result.shortcut" --force
 shortcuty --json sign "My Shortcut.shortcut" --timeout 900
 ```
 
-The CLI uploads the file to `https://sign.shortcuty.app/api/v1/sign` as multipart
-field `file`, then streams the signed download to disk. No API key is sent.
-Only sign files you intend to upload to that service.
+Sign an unsigned `.shortcut` file with the [Shortcuty signing service](https://sign.shortcuty.app).
+No API key is required. The signed file is saved in the current directory using
+the server's suggested filename.
 
-By default, the output uses the server's filename in the current directory,
-including its Unicode `filename*` value (for example `My Shortcut — Signed.shortcut`).
-Path components and unsafe filename characters are removed. If the header is
-missing, a `— Signed.shortcut` name is derived from the input.
-Use `--output` to choose a path; its parent directory must already exist.
+| Option | Purpose |
+|---|---|
+| `--output PATH`, `-o PATH` | Choose an output path; its parent directory must exist. |
+| `--force` | Allow overwriting the output file. |
+| `--timeout SECONDS` | Signing read timeout; default: **300 seconds**. |
 
-Existing files and the input file are protected unless `--force` is supplied.
-The CLI writes a temporary file beside the destination and commits it atomically
-after checking the `AEA1` marker, response length, and SHA-256 metadata when
-provided. These checks detect damaged transfers; they do not cryptographically
-verify Apple's signature. Failed transfers leave existing files intact.
-
-Uploads and downloads are streamed, with no invented client file-size limit.
-A server/proxy `413` response reports its size limit. Empty files are rejected
-locally; the server validates the workflow and rejects already-signed files.
-Signing is synchronous and may wait in a queue. The default read timeout is 300
-seconds (`sign --timeout` changes it); the connection timeout is 10 seconds.
-Read timeouts measure inactivity, not the total command duration. The server's
-90-second signing-process timeout excludes upload and queue wait.
-The CLI never retries signing automatically.
+**Overwrite warning:** `--force` can replace an existing file, including the input.
 
 See the [Signing API documentation](https://github.com/Shortcuty/Signing-Server-API-Documentation)
-for the full contract and error codes.
+for API details.
 
 ### Check for Updates
 
@@ -209,7 +198,7 @@ shortcuty check-updates
 
 ### Update CLI
 
-Update to the latest version of the CLI:
+Install the latest CLI from GitHub `main`:
 
 ```bash
 shortcuty cli-update
@@ -228,26 +217,18 @@ Create and update default to JSON. URL-encoded Form uses the same field names:
 shortcuty --body-format form update <uuid> --version "1.2.0" --changelog "Bug fixes"
 ```
 
-JSON booleans remain booleans; Form booleans are sent as `true` or `false` text.
-Screenshot uploads and signing always use multipart with a generated boundary.
-
 ### Timeouts and Errors
 
 ```bash
 shortcuty --timeout 120 list --page 2 --per-page 20
 ```
 
-Creator API requests default to a 10-second connection timeout and a 60-second
-read timeout. `--timeout` changes the read timeout. Pages and page sizes must be
-positive; pagination metadata is preserved in JSON results.
+Creator API commands use a **60-second** read timeout. Set `--timeout` before
+the command to change it. Signing has its own [timeout option](#sign-a-local-shortcut).
 
-Requests are made once, with no automatic retries or redirects. Errors return a
-nonzero exit code and include HTTP status and any server error code/message;
-known API keys and Bearer values are redacted from diagnostic messages.
-Invalid or non-JSON responses are reported without dumping server HTML.
-After a timeout, lost response, or server error, a write may already have saved
-data. Check before repeating it: use `list` after creation, `get <uuid>` after
-submission, and `history <uuid>` after an update.
+Errors go to stderr and return a nonzero exit code. After a timeout or server
+error, check the result before trying a write again: use `list` after creation,
+`get <uuid>` after submission, and `history <uuid>` after an update.
 
 ### Skip Update Check
 
@@ -259,8 +240,6 @@ shortcuty --no-check-updates list
 
 Automatic checks run after successful human-readable Creator commands. Help,
 version, JSON output, and signing skip them. Notifications go to stderr.
-Explicit `check-updates` failures report an error rather than claiming the CLI
-is current. `cli-update` installs GitHub `main` using the running Python's pip.
 
 ## JSON Output
 

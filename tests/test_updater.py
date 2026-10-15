@@ -21,7 +21,8 @@ class UpdaterTests(OfflineTest):
         self.assertEqual(get.call_args.kwargs["timeout"], (5, 5))
 
     def test_current_version_returns_no_update(self):
-        with patch("shortcuty_cli.updater.requests.get", return_value=response(content=b'__version__ = "1.0.0"')):
+        metadata = '__version__ = "{}"'.format(updater.get_current_version()).encode()
+        with patch("shortcuty_cli.updater.requests.get", return_value=response(content=metadata)):
             self.assertIsNone(updater.check_for_updates())
 
     def test_invalid_or_missing_metadata_fails_clearly(self):

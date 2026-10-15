@@ -8,7 +8,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="shortcuty-cli",
-    version="1.0.0",
+    version="1.1.0",
     author="Shortcuty",
     description="Command-line interface for the Shortcuty Creator API",
     long_description=long_description,
